@@ -33,15 +33,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from fastapi.middleware.cors import CORSMiddleware
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
-    allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
-)
 
 # Load Models
 models = {}
@@ -280,64 +272,108 @@ def chat_response(request: ChatRequest):
         query = request.query.lower()
         context = request.context
 
-        # HELLO / GREETING
+        # 1. GREETINGS
         if any(w in query for w in ['hi', 'hello', 'hey', 'start']):
-            return {"response": "Hello! I am your EV Intelligence Assistant. I have analyzed your battery data. Ask me about your SOH, range, resale value, or potential anomalies."}
+            if context:
+                return {"response": "Hello! I am your EV Intelligence Assistant. I see you've run a battery analysis. Ask me about your specific SOH, resale value, or how to improve your range."}
+            else:
+                return {"response": "Hello! I am your EV Intelligence Assistant. I can explain battery terminology or give maintenance tips. \n\nFor a personalized health report, please run the **Battery Analysis** on the dashboard first!"}
 
-        # CONTEXTUAL ANALYSIS (Requires Analysis Result)
+        # 2. TERMINOLOGY & DEFINITIONS (Context Independent)
+        terms = {
+            "soh": "**State of Health (SOH)** is a percentage representing your battery's current max capacity compared to when it was new. \n\n100% means perfect condition. As you drive and charge, this number naturally drops.",
+            "soc": "**State of Charge (SOC)** is how full your battery is *right now* (like a fuel gauge). It is different from SOH, which measures long-term degradation.",
+            "degradation": "**Battery Degradation** is the permanent loss of capacity over time. It is caused by active chemical usage (cycles) and calendar aging (time/temperature).",
+            "bms": "**Battery Management System (BMS)** is the computer inside your car that protects the battery. It balances the cells, controls temperature, and prevents overcharging.",
+            "nmc": "**NMC (Nickel Manganese Cobalt)** is a high-energy-density battery chemistry. It offers great range but degrades faster if kept at 100% charge for long periods.",
+            "lfp": "**LFP (Lithium Iron Phosphate)** is a highly durable, very safe battery chemistry. It handles 100% charges better than NMC and lasts significantly more cycles, though it offers slightly less range per kg.",
+            "cycle": "A **Charge Cycle** equals discharging 100% of the battery. \n\nNote: Two 50% discharges equal one full cycle. Most modern EV batteries last 1500 to 3000 cycles."
+        }
+        
+        for term, definition in terms.items():
+            if term in query:
+                return {"response": definition}
+
+        # 3. ADVANCED SUGGESTIONS / HOW-TO (Context Independent)
+        if any(w in query for w in ['improve', 'better', 'tip', 'advice', 'extend', 'how to', 'protect']):
+            if 'range' in query or 'mileage' in query:
+                msg = "**Tips to Maximize Daily Range:**\n" \
+                      "• Avoid aggressive acceleration (keeps discharge amps low).\n" \
+                      "• Use regenerative braking effectively.\n" \
+                      "• Pre-condition the cabin while plugged into the charger.\n" \
+                      "• Maintain correct tire pressure."
+                return {"response": msg}
+            else:
+                msg = "**Physics-Guided Tips to Extend Battery Life (SOH):**\n" \
+                      "1. **The 20-80 Rule**: Try to keep your daily charge between 20% and 80%. High voltage (100%) strains cell chemistry.\n" \
+                      "2. **Minimize DC Fast Charging**: High current generates excess heat, breaking down the cathode faster. Use slow (Level 2) charging for daily use.\n" \
+                      "3. **Avoid Deep Discharges**: Never let the car sit at 0%.\n" \
+                      "4. **Thermal Management**: Park in the shade on hot days if possible. High temperatures accelerate calendar aging."
+                return {"response": msg}
+
+        # 4. CONTEXTUAL ANALYSIS (Requires the user to have run the prediction)
         if context:
-            # SOH / HEALTH
+            # HEALTH / SOH
             if any(w in query for w in ['soh', 'health', 'condition', 'good']):
                 soh = context.get('predicted_soh', 0)
                 rating = "excellent" if soh > 90 else "good" if soh > 80 else "fair" if soh > 70 else "poor"
-                return {"response": f"Your battery Health (SOH) is {soh:.1f}%. This is considered {rating}. It means you have {soh:.1f}% of the original capacity remaining."}
+                return {"response": f"Your current **State of Health (SOH) is {soh:.1f}%**.\n\nThis is considered **{rating}**. You have lost about {(100-soh):.1f}% of your original factory range due to usage and aging."}
             
             # ANOMALY / RISK
             if any(w in query for w in ['risk', 'anomaly', 'warning', 'safe', 'danger']):
                 is_anomaly = context.get('anomaly_warning', False)
                 risk = context.get('risk_rating', 'Unknown')
                 if is_anomaly:
-                    return {"response": f"⚠️ ALERT: I have detected an anomaly in your degradation patterns. The risk rating is '{risk}'. The degradation rate is higher than expected for your mileage. I recommend scheduling a physical inspection immediately."}
+                    return {"response": f"⚠️ **ALERT: High Risk Detected**\n\nI have detected an anomaly in your degradation patterns. The calculated degradation rate is substantially higher than expected for your mileage. \n\n**Recommendation:** Please schedule a physical inspection with a certified technician immediately. This may be covered under warranty."}
                 else:
-                    return {"response": f"✅ Good news. No anomalies were detected. Your risk rating is '{risk}'. The battery is aging normally according to our models."}
+                    return {"response": f"✅ **Good News: No anomalies detected.**\n\nYour risk rating is '{risk}'. The battery's degradation curve matches expectation models for your age and mileage."}
 
             # RESALE VALUE
             if any(w in query for w in ['resale', 'value', 'price', 'worth', 'sell']):
                 val = context.get('resale_value_usd', 0)
-                return {"response": f"Based on your battery SOH and mileage, the estimated resale value contribution of the battery pack is ${val:,.2f}. A healthy battery significantly boosts your car's trade-in value."}
+                return {"response": f"Based on our depreciation algorithms factoring your current SOH and odometer, the estimated **Resale Value contribution of the battery pack is ${val:,.2f}**.\n\nMaintaining a high SOH is the #1 way to preserve your EV's trade-in value."}
 
             # MATERIALS / RECYCLING
             if any(w in query for w in ['material', 'lithium', 'cobalt', 'recycle', 'composition']):
                 mats = context.get('material_composition', {})
                 li = mats.get('lithium_g', 0)
                 co = mats.get('cobalt_g', 0)
-                return {"response": f"Your battery contains approximately {li}g of Lithium and {co}g of Cobalt. These materials are highly valuable and should be recycled at the end of the battery's life."}
+                fe = mats.get('iron_g', 0)
+                if fe > 0: # LFP detected
+                    return {"response": f"Based on BatPaC models, your LFP pack contains approx:\n• **{li}g of Lithium**\n• **{fe}g of Iron**\n\nBecause it does not use expensive Cobalt or Nickel, it is highly sustainable!"}
+                else:
+                    return {"response": f"Based on BatPaC models, your NMC pack contains approx:\n• **{li}g of Lithium**\n• **{co}g of Cobalt**\n\nThese critical minerals are highly valuable. Please ensure proper recycling at end-of-life."}
             
-            # CYCLES / USAGE
+            # THERMAL / CYCLES
             if any(w in query for w in ['cycle', 'charge', 'usage', 'life']):
                 cycles = context.get('latent_features', {}).get('pred_charging_cycles', 0)
-                return {"response": f"I estimate this battery has undergone approximately {cycles:.0f} equivalent full charge cycles. Most Li-ion batteries last 1500-2000 cycles before significant capacity loss."}
+                return {"response": f"Analytic estimates suggest this battery has undergone roughly **{cycles:.0f} equivalent full charge cycles**.\n\nMost modern EV packs are rated for 1,500 to 2,000 cycles before falling below 80% capacity."}
 
             # WARRANTY
             if 'warranty' in query:
                 is_anomaly = context.get('anomaly_warning', False)
                 if is_anomaly:
-                    return {"response": "Due to the detected anomaly, this battery is currently NOT eligible for automatic warranty extension. A service center verification is required."}
+                    return {"response": "Due to the **detected anomaly**, this battery is currently NOT eligible for automatic online warranty extension. A physical service center verification is required."}
                 else:
-                    return {"response": "Your battery is in good health and IS ELIGIBLE for our Platinum Shield Extended Warranty. You can activate it in the 'Extend Warranty' tab."}
+                    return {"response": "Your battery passed the health check and **IS ELIGIBLE** for our Platinum Shield Extended Warranty. You can activate this in the 'Extend Warranty' tab."}
 
-        # GENERAL KNOWLEDGE (Fallback)
-        if 'charge' in query:
-            return {"response": "Tip: To maximize life, try to keep your daily charge between 20% and 80%. Avoid leaving the car at 100% or 0% for long periods."}
-        
-        if 'range' in query:
-            return {"response": "Your range depends heavily on SOH. As SOH drops, your maximum range drops proportionally. Keep tires inflated and drive smoothly to maximize range."}
+            # VAGUE / GENERAL REPORT INFO
+            if any(w in query for w in ['info', 'report', 'details', 'summary', 'more', 'about my']):
+                soh = context.get('predicted_soh', 0)
+                val = context.get('resale_value_usd', 0)
+                risk = context.get('risk_rating', 'Unknown')
+                return {"response": f"**Here is a summary of your battery report:**\n\n• **Health (SOH):** {soh:.1f}%\n• **Risk Profile:** {risk}\n• **Estimated Battery Value:** ${val:,.2f}\n\nAsk me specifically about 'SOH', 'Resale Value', 'Risk', or 'How to improve life' for more details!"}
 
-        return {"response": "I can help you analyze your specific battery report. Please run an analysis first, then ask me about 'SOH', 'Risk', or 'Value'."}
+        # 5. NO CONTEXT FALLBACK
+        elif not context and any(w in query for w in ['my', 'soh', 'risk', 'value', 'warranty']):
+             return {"response": "You are asking about specific data, bringing up your personal battery context.\n\n⚠️ **Action Required:** Please hit the **'Run Analysis'** button on the main Dashboard so I can read your vehicle's telemetry data before answering!"}
+
+        # 6. ULTIMATE CATCH-ALL
+        return {"response": "I'm not quite sure how to answer that yet. Try asking me for 'EV Terms' (like what is SOH), 'Battery Tips', or run your Health Analysis and ask about 'My Risk' or 'My Resale Value'."}
 
     except Exception as e:
         print(f"Chat Error: {e}")
-        return {"response": "I encountered an error processing your question. Please try again."}
+        return {"response": "I encountered a system error processing your question. Please try again."}
 
 @app.get("/health")
 def health_check():

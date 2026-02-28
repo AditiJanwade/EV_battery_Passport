@@ -80,7 +80,7 @@ function App() {
         try {
 
             const res = await axios.post(
-                "http://localhost:8000/register_vehicle",
+                `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/register_vehicle`,
                 {
                     user_id: userId,
                     vehicle_id: vehicleId,
@@ -120,7 +120,7 @@ function App() {
         try {
 
             const res = await axios.get(
-                `http://localhost:8000/get_vehicles/${id}`
+                `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/get_vehicles/${id}`
             );
 
             if (res.data.vehicles.length > 0) {
@@ -152,7 +152,7 @@ function App() {
 
         try {
             const res = await axios.get(
-                `http://localhost:8000/get_vehicles/${uid}`
+                `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/get_vehicles/${uid}`
             );
 
             setVehicles(res.data.vehicles);
@@ -173,7 +173,7 @@ function App() {
         try {
 
             const response = await axios.post(
-                "http://localhost:8000/predict",
+                `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/predict`,
                 {
                     user_id: userId,
                     vehicle_id: selectedVehicle.vehicle_id,
@@ -194,7 +194,7 @@ function App() {
         try {
 
             const res = await axios.post(
-                "http://localhost:8000/update_vehicle",
+                `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/update_vehicle`,
                 {
                     user_id: userId,
                     vehicle_id: selectedVehicle.vehicle_id,
@@ -531,12 +531,14 @@ function App() {
 
                                 <input
                                     type="date"
+                                    placeholder="Buying Date"
                                     className={profileInput + " mt-2"}
                                     onChange={(e) => setBuyingDate(e.target.value)}
                                 />
 
                                 <input
                                     type="date"
+                                    placeholder="Manufacturing Date"
                                     className={profileInput + " mt-2"}
                                     onChange={(e) => setManufactureDate(e.target.value)}
                                 />

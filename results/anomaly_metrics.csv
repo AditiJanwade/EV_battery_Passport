@@ -1,0 +1,6 @@
+Metric,Value
+Residual Mean,9.418890301476662
+Residual Std,5.907774320387513
+Threshold (3SD),27.1422132626392
+Detected Anomalies,1.0
+ROC AUC,0.7751487698729905
