@@ -7,6 +7,7 @@ import pandas as pd
 import joblib
 import numpy as np
 import os
+import traceback
 from datetime import date
 import sqlite3
 from database import init_db
