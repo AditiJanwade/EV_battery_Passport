@@ -10,20 +10,20 @@ import os
 import traceback
 from datetime import date
 import sqlite3
-from database import init_db
+from database import init_db, DB_PATH
 
 init_db()
 
 
 # Configuration
-MODEL_DIR = "../models"
+MODEL_DIR = os.path.join(os.path.dirname(__file__), "../models")
 STAGE1_MODELS = {
     'charging_cycles': 'stage1_charging_cycles.pkl',
     'efficiency': 'stage1_efficiency.pkl',
     'battery_temp': 'stage1_battery_temp.pkl'
 }
 STAGE2_MODEL = 'stage2_soh_model.pkl'
-ANOMALY_METRICS = "../results/anomaly_metrics.csv"
+ANOMALY_METRICS = os.path.join(os.path.dirname(__file__), "../results/anomaly_metrics.csv")
 
 app = FastAPI(title="EV Battery Health Intelligence Platform")
 app.add_middleware(
@@ -59,7 +59,7 @@ def load_artifacts():
         if not thresh_row.empty:
             anomaly_threshold = float(thresh_row.iloc[0]['Value'])
         else:
-            anomaly_threshold = 10.0 # Fallback
+            anomaly_threshold = 25.0
             
         print("Models and artifacts loaded successfully.")
     except Exception as e:
@@ -72,32 +72,28 @@ class InputData(BaseModel):
     total_dist_km: float
     charging_time_min: float
 
-class VehicleRegister(BaseModel):
+class VehicleRegistration(BaseModel):
     user_id: str
     vehicle_id: str
     battery_type: str
     buying_price: float
-    buying_date: date
-    manufacture_date: date
+    buying_date: str
+    manufacture_date: str
 
 import traceback
 @app.post("/register_vehicle")
-def register_vehicle(data: VehicleRegister):
+def register_vehicle(data: VehicleRegistration):
 
-    conn = sqlite3.connect("vehicle.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
-    INSERT OR IGNORE INTO vehicle
-    VALUES(?,?,?,?,?,?)
-    """,
-    (
-        data.user_id,
-        data.vehicle_id,
-        data.battery_type,
-        data.buying_price,
-        data.buying_date,
-        data.manufacture_date
+        INSERT OR IGNORE INTO vehicle 
+        (user_id, vehicle_id, battery_type, buying_price, buying_date, manufacture_date) 
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (
+        data.user_id, data.vehicle_id, data.battery_type,
+        data.buying_price, data.buying_date, data.manufacture_date
     ))
 
     if cursor.rowcount == 0:
@@ -111,7 +107,7 @@ def register_vehicle(data: VehicleRegister):
 
 @app.post("/predict")
 def predict_health(data: InputData):
-    conn = sqlite3.connect("vehicle.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -383,7 +379,7 @@ def health_check():
 @app.get("/get_vehicles/{user_id}")
 def get_vehicles(user_id: str):
 
-    conn = sqlite3.connect("vehicle.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute("SELECT * FROM vehicle WHERE user_id=?", (user_id,))
@@ -405,9 +401,9 @@ def get_vehicles(user_id: str):
     return {"vehicles": vehicles}
 
 @app.post("/update_vehicle")
-def update_vehicle(data: VehicleRegister):
+def update_vehicle(data: VehicleRegistration):
 
-    conn = sqlite3.connect("vehicle.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -433,9 +429,9 @@ def update_vehicle(data: VehicleRegister):
     return {"message":"Vehicle Updated Successfully"}
 
 @app.get("/get_vehicles/{user_id}")
-def get_vehicles(user_id: str):
+def get_vehicles_route(user_id: str):
 
-    conn = sqlite3.connect("vehicle.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute("SELECT * FROM vehicle WHERE user_id=?", (user_id,))
